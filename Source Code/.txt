@@ -1,1 +1,84 @@
+#include <ESP8266WiFi.h>
+#include <DHT.h>
+#include <FirebaseESP8266.h>   // Library FirebaseESP8266
 
+#define DHTPIN 5
+#define DHTTYPE DHT11
+
+const char* ssid = "Coco";
+const char* password = "123456789";
+const char* firebaseHost = "your-firebase-host.firebaseio.com";  // Ganti dengan host Firebase Anda
+
+DHT dht(DHTPIN, DHTTYPE);
+
+const int relayPin = 16;
+const int fanPin = 12;
+
+FirebaseData firebaseData;   // Objek FirebaseData untuk berinteraksi dengan Firebase
+
+void setup() {
+  Serial.begin(9600);
+  delay(10);
+
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);
+
+  pinMode(fanPin, OUTPUT);
+  digitalWrite(fanPin, LOW);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Menghubungkan ke WiFi..");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi terhubung");
+  Serial.print("Alamat IP: ");
+  Serial.println(WiFi.localIP());
+
+  dht.begin();
+
+  Firebase.begin(firebaseHost);  // Mulai koneksi ke Firebase
+}
+
+void loop() {
+  delay(2000);
+
+  int humidity = dht.readHumidity();
+  int temperature = dht.readTemperature();
+
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Gagal membaca sensor DHT11");
+    return;
+  }
+
+  Serial.print("Kelembaban: ");
+  Serial.print(humidity);
+  Serial.print(" %\t");
+  Serial.print("Suhu: ");
+  Serial.print(temperature);
+  Serial.println(" °C");
+
+  // Kirim data ke Firebase
+  String path = "/sensor_data";
+  String payload = "{\"humidity\":" + String(humidity) + ",\"temperature\":" + String(temperature) + "}";
+
+  if (Firebase.setJSON(firebaseData, path, payload)) {
+    Serial.println("Data berhasil dikirim ke Firebase");
+  } else {
+    Serial.println("Gagal mengirim data ke Firebase");
+    Serial.println("Alasan: " + firebaseData.errorReason());
+  }
+
+  // Aktifkan kipas jika suhu lebih dari 30°C
+  if (temperature > 30) {
+    digitalWrite(relayPin, HIGH);
+    digitalWrite(fanPin, HIGH);
+  } else {
+    digitalWrite(relayPin, LOW);
+    digitalWrite(fanPin, LOW);
+  }
+}
